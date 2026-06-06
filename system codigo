@@ -1,0 +1,180 @@
+///Interfaces
+public interface Bloqueavel {
+    void bloquear();
+    void desbloquear();
+    boolean isAtiva();
+}
+public interface Tributavel {
+    double calcularImposto();
+}
+
+///Classe da Conta Bancária
+public abstract class ContaBancaria implements Bloqueavel {
+    protected String numero;
+    protected String titular;
+    protected double saldo;
+    protected boolean ativa;
+    
+    public class SaldoInsuficienteException extends RuntimeException {
+        public SaldoInsuficienteException(String mensagem) {
+            super(mensagem);
+        }
+    }
+    
+    public class OperacaoInvalidaException extends Exception {
+        public OperacaoInvalidaException(String mensagem) {
+            super(mensagem);
+        }
+    }
+    
+    public ContaBancaria(String numero, String titular) {
+        if (titular == null || titular.trim().isEmpty()) {
+            throw new IllegalArgumentException("O titular não pode ser nulo ou vazio.");
+        }
+        this.numero = numero;
+        this.titular = titular;
+        this.saldo = 0.0;
+        this.ativa = true; // Conta inicia ativa
+    }
+
+    public abstract double calcularRendimento();
+
+    public void depositar(double valor) {
+        if (valor <= 0) {
+            throw new IllegalArgumentException("O valor de depósito deve ser maior que zero.");
+        }
+        this.saldo += valor;
+    }
+
+    public void sacar(double valor) throws OperacaoInvalidaException {
+        if (!ativa) {
+            throw new OperacaoInvalidaException("Não é possível realizar saque: a conta está bloqueada.");
+        }
+        if (valor <= 0) {
+            throw new IllegalArgumentException("O valor de saque deve ser maior que zero.");
+        }
+    }
+
+    // Implementação da interface Bloqueavel
+    @Override
+    public void bloquear() {
+        this.ativa = false;
+    }
+
+    @Override
+    public void desbloquear() {
+        this.ativa = true;
+    }
+
+    @Override
+    public boolean isAtiva() {
+        return this.ativa;
+    }
+
+    public double getSaldo() {
+        return saldo;
+    }
+
+    public String getTitular() {
+        return titular;
+    }
+}
+
+///Sub-Classes
+public class ContaCorrente extends ContaBancaria implements Tributavel {
+    private static final double LIMITE_CHEQUE_ESPECIAL = 1000.0;
+    private static final double TAXA_IMPOSTO_SAQUE = 0.0038; // 0.38%
+
+    public ContaCorrente(String numero, String titular) {
+        super(numero, titular);
+    }
+
+    @Override
+    public double calcularRendimento() {
+        return 0; // Não rende
+    }
+
+    @Override
+    public double calcularImposto() {
+        return 0; // O imposto é calculado pontualmente no saque
+    }
+
+    @Override
+    public void sacar(double valor) throws OperacaoInvalidaException {
+        super.sacar(valor); // Validações básicas (ativo e valor > 0)
+
+        double saldoDisponivel = this.saldo + LIMITE_CHEQUE_ESPECIAL;
+        double imposto = valor * TAXA_IMPOSTO_SAQUE;
+        double totalNecessario = valor + imposto;
+
+        if (saldoDisponivel < totalNecessario) {
+            throw new SaldoInsuficienteException("Saldo e limite do cheque especial insuficientes para cobrir o saque e as taxas.");
+        }
+
+        this.saldo -= totalNecessario;
+    }
+}
+
+public class ContaPoupanca extends ContaBancaria implements Tributavel {
+    private static final double TAXA_RENDIMENTO = 0.005; // 0.5% ao mês
+    private static final double TAXA_IMPOSTO_RENDIMENTO = 0.225; // 22.5% sobre o rendimento
+
+    public ContaPoupanca(String numero, String titular) {
+        super(numero, titular);
+    }
+
+    @Override
+    public double calcularRendimento() {
+        return this.saldo * TAXA_RENDIMENTO;
+    }
+
+    @Override
+    public double calcularImposto() {
+        return calcularRendimento() * TAXA_IMPOSTO_RENDIMENTO;
+    }
+
+    @Override
+    public void sacar(double valor) throws OperacaoInvalidaException {
+        super.sacar(valor);
+
+        // Regra simplificada: mínimo 30 dias (não simulada dinamicamente nesta base simples)
+        if (this.saldo < valor) {
+            throw new SaldoInsuficienteException("Saldo insuficiente para saque.");
+        }
+
+        this.saldo -= valor;
+    }
+}
+
+public class ContaSalario extends ContaBancaria {
+    private boolean saqueRealizadoNoMes;
+
+    public ContaSalario(String numero, String titular) {
+        super(numero, titular);
+        this.saqueRealizadoNoMes = false;
+    }
+
+    @Override
+    public double calcularRendimento() {
+        return 0; // Não rende
+    }
+
+    @Override
+    public void sacar(double valor) throws OperacaoInvalidaException {
+        super.sacar(valor);
+
+        if (saqueRealizadoNoMes) {
+            throw new OperacaoInvalidaException("Conta Salário permite apenas 1 saque por mês.");
+        }
+
+        if (this.saldo < valor) {
+            throw new SaldoInsuficienteException("Saldo insuficiente para saque.");
+        }
+
+        this.saldo -= valor;
+        this.saqueRealizadoNoMes = true; // Registra que o saque foi feito
+    }
+
+    // Método para resetar o mês (simulação)
+    public void novoMes() {
+        this.saqueRealizadoNoMes = false;
