@@ -1,0 +1,341 @@
+// =========================
+// 2. Classes de Exceção
+// =========================
+
+public class SaldoInsuficienteException extends RuntimeException {
+
+    public SaldoInsuficienteException(String mensagem) {
+        super(mensagem);
+    }
+}
+
+public class OperacaoInvalidaException extends Exception {
+
+    public OperacaoInvalidaException(String mensagem) {
+        super(mensagem);
+    }
+}
+
+/*
+Justificativa:
+
+SaldoInsuficienteException foi implementada como uma exceção Unchecked
+(RuntimeException), pois representa um erro que acontece durante a execução
+quando o usuário tenta movimentar um valor maior que o disponível. Seu
+tratamento não precisa ser obrigatório pelo compilador.
+
+OperacaoInvalidaException foi implementada como uma exceção Checked
+(Exception), pois representa uma regra de negócio que deve ser tratada pelo
+programador, como tentativa de realizar operações em uma conta bloqueada ou
+não autorizada.
+*/
+
+
+// =========================
+// 3. Interfaces
+// =========================
+
+public interface Bloqueavel {
+
+    void bloquear();
+
+    void desbloquear();
+
+    boolean isAtiva();
+}
+
+public interface Tributavel {
+
+    double calcularImposto();
+}
+
+
+// =========================
+// Classe Abstrata
+// =========================
+
+public abstract class ContaBancaria implements Bloqueavel {
+
+    protected String numeroConta;
+    protected String nomeTitular;
+    protected double saldo;
+    protected boolean ativa;
+
+    public ContaBancaria(String numeroConta, String nomeTitular) {
+
+        if (nomeTitular == null || nomeTitular.trim().isEmpty()) {
+            throw new IllegalArgumentException("Titular inválido.");
+        }
+
+        this.numeroConta = numeroConta;
+        this.nomeTitular = nomeTitular;
+        this.saldo = 0.0;
+        this.ativa = true;
+    }
+
+    public abstract double calcularRendimento();
+
+    public void depositar(double valor) {
+
+        if (valor <= 0) {
+            throw new IllegalArgumentException("Valor inválido para depósito.");
+        }
+
+        saldo += valor;
+    }
+
+    public void sacar(double valor) throws OperacaoInvalidaException {
+
+        if (!ativa) {
+            throw new OperacaoInvalidaException("Conta bloqueada.");
+        }
+
+        if (valor <= 0) {
+            throw new IllegalArgumentException("Valor inválido para saque.");
+        }
+    }
+
+    @Override
+    public void bloquear() {
+        ativa = false;
+    }
+
+    @Override
+    public void desbloquear() {
+        ativa = true;
+    }
+
+    @Override
+    public boolean isAtiva() {
+        return ativa;
+    }
+
+    public double getSaldo() {
+        return saldo;
+    }
+
+    public String getTitular() {
+        return nomeTitular;
+    }
+}
+
+
+// =========================
+// Conta Corrente
+// =========================
+
+public class ContaCorrente extends ContaBancaria implements Tributavel {
+
+    private static final double LIMITE = 1000.0;
+    private static final double TAXA = 0.0038;
+
+    public ContaCorrente(String numeroConta, String nomeTitular) {
+        super(numeroConta, nomeTitular);
+    }
+
+    @Override
+    public double calcularRendimento() {
+        return 0;
+    }
+
+    @Override
+    public double calcularImposto() {
+        return saldo * TAXA;
+    }
+
+    @Override
+    public void sacar(double valor) throws OperacaoInvalidaException {
+
+        super.sacar(valor);
+
+        double total = valor + (valor * TAXA);
+
+        if ((saldo + LIMITE) < total) {
+            throw new SaldoInsuficienteException("Saldo insuficiente para realizar o saque.");
+        }
+
+        saldo -= total;
+    }
+}
+
+
+// =========================
+// Conta Poupança
+// =========================
+
+public class ContaPoupanca extends ContaBancaria implements Tributavel {
+
+    private static final double RENDIMENTO = 0.005;
+    private static final double IMPOSTO = 0.225;
+
+    public ContaPoupanca(String numeroConta, String nomeTitular) {
+        super(numeroConta, nomeTitular);
+    }
+
+    @Override
+    public double calcularRendimento() {
+        return saldo * RENDIMENTO;
+    }
+
+    @Override
+    public double calcularImposto() {
+        return calcularRendimento() * IMPOSTO;
+    }
+
+    @Override
+    public void sacar(double valor) throws OperacaoInvalidaException {
+
+        super.sacar(valor);
+
+        if (saldo < valor) {
+            throw new SaldoInsuficienteException("Saldo insuficiente.");
+        }
+
+        saldo -= valor;
+    }
+}
+
+
+// =========================
+// Conta Salário
+// =========================
+
+public class ContaSalario extends ContaBancaria {
+
+    private boolean saqueRealizado;
+
+    public ContaSalario(String numeroConta, String nomeTitular) {
+        super(numeroConta, nomeTitular);
+        saqueRealizado = false;
+    }
+
+    @Override
+    public double calcularRendimento() {
+        return 0;
+    }
+
+    @Override
+    public void sacar(double valor) throws OperacaoInvalidaException {
+
+        super.sacar(valor);
+
+        if (saqueRealizado) {
+            throw new OperacaoInvalidaException(
+                "A Conta Salário permite apenas um saque por período."
+            );
+        }
+
+        if (saldo < valor) {
+            throw new SaldoInsuficienteException("Saldo insuficiente.");
+        }
+
+        saldo -= valor;
+        saqueRealizado = true;
+    }
+
+    public void novoPeriodo() {
+        saqueRealizado = false;
+    }
+}
+
+
+// =========================
+// Main
+// =========================
+
+import java.util.ArrayList;
+import java.util.List;
+
+public class Main {
+
+    public static void main(String[] args) {
+
+        ContaCorrente corrente = new ContaCorrente("001", "João Martins");
+        ContaPoupanca poupanca = new ContaPoupanca("002", "Mariana Alves");
+        ContaSalario salario = new ContaSalario("003", "Carlos Henrique");
+
+        List<ContaBancaria> contas = new ArrayList<>();
+
+        contas.add(corrente);
+        contas.add(poupanca);
+        contas.add(salario);
+
+        System.out.println("===== RENDIMENTOS =====");
+
+        for (ContaBancaria conta : contas) {
+
+            System.out.println("Titular: " + conta.getTitular());
+            System.out.println("Tipo: " + conta.getClass().getSimpleName());
+            System.out.printf("Rendimento: R$ %.2f%n",
+                    conta.calcularRendimento());
+
+            if (conta instanceof Tributavel) {
+
+                Tributavel t = (Tributavel) conta;
+
+                System.out.printf("Imposto: R$ %.2f%n",
+                        t.calcularImposto());
+
+            } else {
+
+                System.out.println("Imposto: Isento");
+            }
+
+            System.out.println("--------------------------------");
+        }
+
+        // Teste da SaldoInsuficienteException
+        try {
+
+            poupanca.depositar(800);
+
+            System.out.println("\nTentando sacar R$ 2.000 da poupança:");
+
+            poupanca.sacar(2000);
+
+        } catch (SaldoInsuficienteException e) {
+
+            System.out.println("Erro: " + e.getMessage());
+
+        } catch (OperacaoInvalidaException e) {
+
+            System.out.println("Erro: " + e.getMessage());
+        }
+
+        // Teste da OperacaoInvalidaException
+        try {
+
+            corrente.depositar(500);
+
+            corrente.bloquear();
+
+            System.out.println("\nTentando sacar com a conta bloqueada:");
+
+            corrente.sacar(100);
+
+        } catch (OperacaoInvalidaException e) {
+
+            System.out.println("Erro: " + e.getMessage());
+
+        } catch (SaldoInsuficienteException e) {
+
+            System.out.println("Erro: " + e.getMessage());
+        }
+
+        // Teste da Conta Salário
+        try {
+
+            salario.depositar(1500);
+
+            salario.sacar(300);
+
+            System.out.println("\nTentando realizar um segundo saque:");
+
+            salario.sacar(100);
+
+        } catch (OperacaoInvalidaException | SaldoInsuficienteException e) {
+
+            System.out.println("Erro: " + e.getMessage());
+        }
+    }
+}
